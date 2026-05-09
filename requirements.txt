@@ -1,5 +1,6 @@
 flask
 gunicorn
+ollama
 pypdf
 python-docx
 openpyxl

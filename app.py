@@ -82,10 +82,20 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("GROQ_API_
 if os.getenv("LLM_BACKEND", "").strip().lower() == "openai" and not OPENAI_API_BASE:
     OPENAI_API_BASE = "https://api.groq.com/openai/v1"
 
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "https://ollama.com").strip().rstrip("/")
+OLLAMA_CLOUD_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
+
 
 def use_openai_compatible_backend() -> bool:
     """云端（Render 等）使用 OpenAI 兼容 HTTP API（Groq / OpenAI / OpenRouter 等）。"""
     return os.getenv("LLM_BACKEND", "").strip().lower() == "openai"
+
+
+def use_ollama_cloud_backend() -> bool:
+    """使用 Ollama 官方云（https://ollama.com）等：环境变量 OLLAMA_API_KEY + Client.chat。"""
+    if use_openai_compatible_backend():
+        return False
+    return bool(OLLAMA_CLOUD_API_KEY)
 
 
 def warn_if_render_misconfigured() -> None:
@@ -97,11 +107,14 @@ def warn_if_render_misconfigured() -> None:
                 "RENDER WARNING: LLM_BACKEND=openai 但未设置 OPENAI_API_KEY / GROQ_API_KEY。",
                 flush=True,
             )
+    elif use_ollama_cloud_backend():
+        pass
     elif IS_LOCAL_OLLAMA:
         print(
-            "RENDER WARNING: OLLAMA_API_URL 指向本机，容器内无法访问。"
-            "请在 Environment 设置 LLM_BACKEND=openai、OPENAI_API_BASE、OPENAI_API_KEY，"
-            "或将 OLLAMA_API_URL 改为公网可访问的 Ollama。",
+            "RENDER WARNING: 默认 OLLAMA_API_URL 指向本机，容器内无法访问。"
+            "请任选其一：① 设置 OLLAMA_API_KEY（及可选 OLLAMA_HOST=https://ollama.com）使用官方云；"
+            "② LLM_BACKEND=openai + OPENAI_API_KEY（Groq/OpenAI）；"
+            "③ 将 OLLAMA_API_URL 改为公网自托管 Ollama。",
             flush=True,
         )
 
@@ -202,6 +215,56 @@ def call_openai_compatible(
     return ""
 
 
+def call_ollama_cloud_chat(
+    prompt: str,
+    model: str,
+    images: Optional[list[str]] = None,
+    options: Optional[dict[str, Any]] = None,
+    keep_alive: Optional[str] = None,
+) -> str:
+    """Ollama 官方 HTTP API（云）：Chat Completions，等价于你本地的 Client(host=..., headers=Bearer ...).chat(...)。"""
+    try:
+        from ollama import Client
+    except ImportError as err:
+        raise ValueError('请安装依赖: pip install ollama') from err
+
+    host = OLLAMA_HOST or "https://ollama.com"
+    client = Client(
+        host=host,
+        headers={"Authorization": f"Bearer {OLLAMA_CLOUD_API_KEY}"},
+    )
+
+    opts: dict[str, Any] = {"temperature": 0.2}
+    if options:
+        opts.update(options)
+
+    msg: dict[str, Any] = {"role": "user", "content": prompt}
+    if images:
+        msg["images"] = images
+
+    chat_kw: dict[str, Any] = {
+        "model": model,
+        "messages": [msg],
+        "options": opts,
+        "stream": False,
+    }
+    if keep_alive:
+        chat_kw["keep_alive"] = keep_alive
+
+    try:
+        resp = client.chat(**chat_kw)
+    except Exception as err:
+        raise ValueError(f"Ollama Cloud 调用失败: {err}") from err
+
+    if isinstance(resp, dict):
+        inner = resp.get("message") or {}
+        return str(inner.get("content") or "").strip()
+    msg_obj = getattr(resp, "message", None)
+    if msg_obj is None:
+        return ""
+    return str(getattr(msg_obj, "content", "") or "").strip()
+
+
 def call_ollama(
     prompt: str,
     model: str,
@@ -209,7 +272,7 @@ def call_ollama(
     options: Optional[dict[str, Any]] = None,
     keep_alive: Optional[str] = None,
 ) -> str:
-    """调用 Ollama /api/generate，或在 LLM_BACKEND=openai 时走 OpenAI 兼容接口。"""
+    """本地 Ollama /generate；或 LLM_BACKEND=openai；或配置 OLLAMA_API_KEY 走官方云 Client.chat。"""
     if use_openai_compatible_backend():
         if not OPENAI_API_KEY:
             raise ValueError(
@@ -223,6 +286,15 @@ def call_ollama(
                 "OPENAI_API_BASE 为空。请在 Environment 设置，例如 https://api.groq.com/openai/v1"
             )
         return call_openai_compatible(
+            prompt=prompt,
+            model=model,
+            images=images,
+            options=options,
+            keep_alive=keep_alive,
+        )
+
+    if use_ollama_cloud_backend():
+        return call_ollama_cloud_chat(
             prompt=prompt,
             model=model,
             images=images,
