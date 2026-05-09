@@ -741,7 +741,32 @@
         font-weight: 700;
       }
 
-      .chat-input-row {
+      .chat-bubble-paged .chat-page {
+        white-space: pre-wrap;
+      }
+
+      .chat-page-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        padding-top: 6px;
+        border-top: 1px solid rgba(208, 139, 29, 0.35);
+        font-size: 12px;
+        color: #d6bf93;
+      }
+
+      .chat-page-bar button {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 6px;
+      }
+
+      .chat-page-bar .page-indicator {
+        flex: 1;
+        text-align: center;
+        font-weight: 600;
+      }
         display: flex;
         gap: 8px;
         padding: 10px;
@@ -1591,10 +1616,86 @@
         }
       }
 
+      function splitIntoChatPages(text, maxChunk) {
+        const max = maxChunk || 2200;
+        const s = String(text || "");
+        if (s.length <= max) {
+          return [s];
+        }
+        const pages = [];
+        let rest = s;
+        while (rest.length > 0) {
+          if (rest.length <= max) {
+            pages.push(rest);
+            break;
+          }
+          let cut = rest.lastIndexOf("\n\n", max);
+          if (cut < Math.floor(max / 3)) {
+            cut = rest.lastIndexOf("\n", max);
+          }
+          if (cut < Math.floor(max / 3)) {
+            cut = max;
+          }
+          pages.push(rest.slice(0, cut).trim());
+          rest = rest.slice(cut).trim();
+        }
+        return pages.filter(Boolean);
+      }
+
       function appendChatBubble(role, text) {
         const bubble = document.createElement("div");
         bubble.className = `chat-bubble ${role}`;
-        bubble.innerHTML = renderChatMarkdown(String(text || ""));
+        const raw = String(text || "");
+        const pageThreshold = 2400;
+        if (role === "bot" && raw.length > pageThreshold) {
+          const pages = splitIntoChatPages(raw, 2200);
+          if (pages.length > 1) {
+            bubble.classList.add("chat-bubble-paged");
+            const wrap = document.createElement("div");
+            pages.forEach((page, i) => {
+              const pane = document.createElement("div");
+              pane.className = "chat-page";
+              pane.dataset.page = String(i);
+              pane.style.display = i === 0 ? "block" : "none";
+              pane.innerHTML = renderChatMarkdown(page);
+              wrap.appendChild(pane);
+            });
+            const bar = document.createElement("div");
+            bar.className = "chat-page-bar";
+            const prevBtn = document.createElement("button");
+            prevBtn.type = "button";
+            prevBtn.textContent = "上一页";
+            const nextBtn = document.createElement("button");
+            nextBtn.type = "button";
+            nextBtn.textContent = "下一页";
+            const indicator = document.createElement("span");
+            indicator.className = "page-indicator";
+            let cur = 0;
+            const total = pages.length;
+            function showPage(idx) {
+              cur = Math.max(0, Math.min(total - 1, idx));
+              wrap.querySelectorAll(".chat-page").forEach((el) => {
+                el.style.display = Number(el.dataset.page) === cur ? "block" : "none";
+              });
+              indicator.textContent = `第 ${cur + 1} / ${total} 页`;
+              prevBtn.disabled = cur === 0;
+              nextBtn.disabled = cur === total - 1;
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            prevBtn.addEventListener("click", () => showPage(cur - 1));
+            nextBtn.addEventListener("click", () => showPage(cur + 1));
+            bar.appendChild(prevBtn);
+            bar.appendChild(indicator);
+            bar.appendChild(nextBtn);
+            bubble.appendChild(wrap);
+            bubble.appendChild(bar);
+            showPage(0);
+          } else {
+            bubble.innerHTML = renderChatMarkdown(raw);
+          }
+        } else {
+          bubble.innerHTML = renderChatMarkdown(raw);
+        }
         chatMessages.appendChild(bubble);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }

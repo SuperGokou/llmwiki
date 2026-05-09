@@ -603,6 +603,39 @@ def looks_like_low_confidence_reply(text: str) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def reply_has_unclosed_markdown_fence(text: str) -> bool:
+    """若 ``` 未成对，多半是模型输出在代码块中被截断。"""
+    return bool(text) and text.count("```") % 2 == 1
+
+
+def extend_chat_reply_for_truncation(reply: str, model: str, max_rounds: int = 6) -> str:
+    """对未闭合 Markdown 代码块等截断情况做多轮续写拼接。"""
+    out = reply
+    rounds = 0
+    while reply_has_unclosed_markdown_fence(out) and rounds < max_rounds:
+        tail = out[-3800:] if len(out) > 3800 else out
+        continue_prompt = f"""你是「Gokou's Bot」。上一个回答在 Markdown 代码块处可能被截断。
+请只输出 **后续内容**：补全未结束的代码块（```）或段落，不要重复前文已完整出现的句子。
+---
+{tail}
+---""".strip()
+        cont = call_ollama(
+            prompt=continue_prompt,
+            model=model,
+            options={
+                "temperature": 0.05,
+                "num_predict": 1536,
+                "num_ctx": 4096,
+            },
+            keep_alive="30m",
+        ).strip()
+        if not cont:
+            break
+        out = f"{out}\n{cont}".strip()
+        rounds += 1
+    return out
+
+
 @app.route("/")
 def index():
     """渲染知识图谱页面。"""
@@ -835,8 +868,8 @@ def chat_with_knowledge_base():
             model=CHAT_MODEL,
             options={
                 "temperature": 0.15,
-                "num_predict": 520,
-                "num_ctx": 2048,
+                "num_predict": 2048,
+                "num_ctx": 4096,
             },
             keep_alive="30m",
         ).strip()
@@ -864,13 +897,15 @@ def chat_with_knowledge_base():
                 model=KNOWLEDGE_MODEL,
                 options={
                     "temperature": 0.1,
-                    "num_predict": 700,
+                    "num_predict": 4096,
                     "num_ctx": 4096,
                 },
                 keep_alive="30m",
             ).strip()
             if fallback_reply:
                 reply = fallback_reply
+
+        reply = extend_chat_reply_for_truncation(reply, CHAT_MODEL)
 
         # 若回答看起来被截断（结尾没有完整句号/问号/叹号），补一段续写。
         if reply and not re.search(r"[。！？.!?]\s*$", reply):
@@ -884,8 +919,8 @@ def chat_with_knowledge_base():
                 model=CHAT_MODEL,
                 options={
                     "temperature": 0.1,
-                    "num_predict": 220,
-                    "num_ctx": 2048,
+                    "num_predict": 1024,
+                    "num_ctx": 4096,
                 },
                 keep_alive="30m",
             ).strip()
