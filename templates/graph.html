@@ -767,6 +767,39 @@
         text-align: center;
         font-weight: 600;
       }
+
+      .chat-bubble-paged {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        overflow: hidden;
+        max-width: 92%;
+      }
+
+      .chat-pages-scroll {
+        max-height: min(46vh, 360px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 8px 10px;
+        flex: 1;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .chat-bubble-paged .chat-page-bar {
+        flex-shrink: 0;
+        margin-top: 0;
+        padding: 8px 10px;
+        border-top: 1px solid rgba(208, 139, 29, 0.45);
+        background: rgba(20, 14, 8, 0.96);
+      }
+
+      .chat-page-bar button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .chat-input-row {
         display: flex;
         gap: 8px;
         padding: 10px;
@@ -822,6 +855,10 @@
         .chat-panel {
           right: 14px;
           bottom: 74px;
+        }
+
+        .chat-pages-scroll {
+          max-height: min(52vh, 460px);
         }
       }
     </style>
@@ -1651,7 +1688,10 @@
           const pages = splitIntoChatPages(raw, 2200);
           if (pages.length > 1) {
             bubble.classList.add("chat-bubble-paged");
+            const scrollWrap = document.createElement("div");
+            scrollWrap.className = "chat-pages-scroll";
             const wrap = document.createElement("div");
+            wrap.className = "chat-pages-inner";
             pages.forEach((page, i) => {
               const pane = document.createElement("div");
               pane.className = "chat-page";
@@ -1660,6 +1700,7 @@
               pane.innerHTML = renderChatMarkdown(page);
               wrap.appendChild(pane);
             });
+            scrollWrap.appendChild(wrap);
             const bar = document.createElement("div");
             bar.className = "chat-page-bar";
             const prevBtn = document.createElement("button");
@@ -1680,6 +1721,7 @@
               indicator.textContent = `第 ${cur + 1} / ${total} 页`;
               prevBtn.disabled = cur === 0;
               nextBtn.disabled = cur === total - 1;
+              scrollWrap.scrollTop = 0;
               chatMessages.scrollTop = chatMessages.scrollHeight;
             }
             prevBtn.addEventListener("click", () => showPage(cur - 1));
@@ -1687,7 +1729,7 @@
             bar.appendChild(prevBtn);
             bar.appendChild(indicator);
             bar.appendChild(nextBtn);
-            bubble.appendChild(wrap);
+            bubble.appendChild(scrollWrap);
             bubble.appendChild(bar);
             showPage(0);
           } else {
