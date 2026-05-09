@@ -1,0 +1,14 @@
+# Render Blueprint: https://render.com/docs/infrastructure-as-code
+# Deploy: New Blueprint → connnect GitHub repo → select this YAML.
+services:
+  - type: web
+    name: gokou-llmwiki
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"

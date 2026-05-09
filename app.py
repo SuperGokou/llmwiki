@@ -781,4 +781,6 @@ def upload_knowledge_files():
 if __name__ == "__main__":
     # 通过环境变量控制 debug，避免默认暴露调试器。
     debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
-    app.run(host="127.0.0.1", port=5000, debug=debug_mode)
+    port = int(os.getenv("PORT", "5000"))
+    host = os.getenv("BIND_HOST", "127.0.0.1")
+    app.run(host=host, port=port, debug=debug_mode)

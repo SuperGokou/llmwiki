@@ -30,7 +30,7 @@
         font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
         background:
           linear-gradient(rgba(5, 10, 22, 0.42), rgba(5, 10, 22, 0.56)),
-          url("/static/images/dragonball-bg.jpg") center/cover fixed no-repeat;
+          url('{{ url_for("static", filename="images/dragonball-bg.jpg") }}') center/cover fixed no-repeat;
         color: var(--text);
         overflow-x: hidden;
       }
@@ -132,12 +132,79 @@
       }
 
       .panel-title-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         font-size: 12px;
         color: var(--muted);
       }
 
-      .knowledge-body.hidden {
-        display: none;
+      .panel-title-arrow {
+        display: inline-block;
+        transition: transform 0.22s ease;
+      }
+
+      .panel-title.expanded .panel-title-arrow {
+        transform: rotate(180deg);
+      }
+
+      .knowledge-body {
+        overflow: hidden;
+      }
+
+      .uploaded-file-section {
+        margin: 10px 0 8px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #2e477d;
+        background: rgba(20, 33, 69, 0.35);
+        max-height: 220px;
+        overflow: auto;
+        transition: max-height 0.22s ease, opacity 0.2s ease;
+      }
+
+      .uploaded-file-section.hidden {
+        max-height: 0;
+        opacity: 0;
+        margin: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-width: 0;
+        pointer-events: none;
+      }
+
+      .uploaded-file-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .uploaded-file-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 8px;
+        border: 1px solid #2e477d;
+        border-radius: 8px;
+        background: rgba(20, 33, 69, 0.45);
+        font-size: 12px;
+      }
+
+      .uploaded-file-name {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .uploaded-file-count {
+        color: #f5c042;
+        font-weight: 600;
       }
 
       .muted {
@@ -281,7 +348,7 @@
         border-radius: 8px;
         background:
           linear-gradient(rgba(6, 12, 26, 0.30), rgba(6, 12, 26, 0.46)),
-          url("/static/images/dragonball-bg.jpg") center/cover no-repeat;
+          url('{{ url_for("static", filename="images/dragonball-bg.jpg") }}') center/cover no-repeat;
         border: 1px solid #3456a8;
       }
 
@@ -501,7 +568,7 @@
         content: "";
         position: absolute;
         inset: 6px;
-        background: url("/static/images/shenron-discord.gif") center/contain no-repeat;
+        background: url('{{ url_for("static", filename="images/shenron-discord.gif") }}') center/contain no-repeat;
         transform: scale(0.74);
         transform-origin: center;
         pointer-events: none;
@@ -699,10 +766,16 @@
         <aside class="card left-panel">
           <h2 id="knowledgeTitle" class="panel-title">
             <span>知识库</span>
-            <span id="knowledgeToggleHint" class="panel-title-indicator">点击折叠</span>
+            <span id="knowledgeToggleHint" class="panel-title-indicator">
+              <span id="knowledgeToggleArrow" class="panel-title-arrow">▾</span>
+              <span id="knowledgeToggleText">显示文件</span>
+            </span>
           </h2>
           <div id="knowledgeBody" class="knowledge-body">
             <div class="muted">支持导入 PDF、Word、Markdown、表格、图片文件，自动生成预测问题。</div>
+            <div id="uploadedFileSection" class="uploaded-file-section hidden">
+              <ul id="uploadedFileList" class="uploaded-file-list"></ul>
+            </div>
             <div class="upload-box">
               <input
                 id="knowledgeUploadInput"
@@ -761,12 +834,12 @@
     </div>
 
     <button id="chatToggleBtn" class="chat-toggle" type="button" aria-label="打开聊天机器人">
-      <img src="/static/images/7star.png" alt="Bot Logo" />
+      <img src='{{ url_for("static", filename="images/7star.png") }}' alt="Bot Logo" />
     </button>
     <section id="chatPanel" class="chat-panel" aria-label="知识库聊天机器人">
       <header id="chatHeader" class="chat-header">
         <span class="chat-header-title">
-          <img src="/static/images/7star.png" alt="Bot Logo" />
+          <img src='{{ url_for("static", filename="images/7star.png") }}' alt="Bot Logo" />
           <span>Gokou's Bot</span>
         </span>
         <button id="chatCloseBtn" class="chat-close-btn" type="button" aria-label="关闭聊天窗口">×</button>
@@ -784,6 +857,10 @@
       const knowledgeTitle = document.getElementById("knowledgeTitle");
       const knowledgeBody = document.getElementById("knowledgeBody");
       const knowledgeToggleHint = document.getElementById("knowledgeToggleHint");
+      const knowledgeToggleText = document.getElementById("knowledgeToggleText");
+      const knowledgeToggleArrow = document.getElementById("knowledgeToggleArrow");
+      const uploadedFileSection = document.getElementById("uploadedFileSection");
+      const uploadedFileList = document.getElementById("uploadedFileList");
       const knowledgeList = document.getElementById("knowledgeList");
       const uploadBox = document.querySelector(".upload-box");
       const knowledgeUploadInput = document.getElementById("knowledgeUploadInput");
@@ -811,6 +888,7 @@
 
       let graphData = { nodes: [], links: [] };
       let articles = [];
+      let uploadedFiles = [];
       let nodeSelection = null;
       let linkSelection = null;
       let labelSelection = null;
@@ -825,26 +903,71 @@
       const pageSize = 8;
       let previewArticleIndex = -1;
       let droppedFiles = [];
-      let isKnowledgeCollapsed = false;
+      let uploadedFilesVisible = false;
 
       // 初始化页面：加载图谱数据并渲染左侧知识库与右侧图。
       async function init() {
-        const graphResponse = await fetch("/api/graph");
+        const [graphResponse, filesResponse] = await Promise.all([
+          fetch("/api/graph"),
+          fetch("/api/uploaded-files"),
+        ]);
         if (!graphResponse.ok) {
           throw new Error(`图谱接口返回异常状态: ${graphResponse.status}`);
         }
+        if (!filesResponse.ok) {
+          throw new Error(`文件列表接口返回异常状态: ${filesResponse.status}`);
+        }
         graphData = await graphResponse.json();
+        const filesPayload = await filesResponse.json();
+        uploadedFiles = filesPayload.files || [];
         articles = graphData.nodes.filter((n) => n.type === "article").sort((a, b) => a.raw_id - b.raw_id);
         const maxPage = Math.max(1, Math.ceil(articles.length / pageSize));
         currentPage = Math.min(currentPage, maxPage);
+        renderUploadedFiles();
         renderKnowledgeList();
         drawGraph();
       }
 
+      function renderUploadedFiles() {
+        uploadedFileList.innerHTML = "";
+        if (uploadedFiles.length === 0) {
+          const li = document.createElement("li");
+          li.className = "uploaded-file-item";
+          li.textContent = "暂无上传文件";
+          uploadedFileList.appendChild(li);
+          return;
+        }
+        uploadedFiles.forEach((item) => {
+          const li = document.createElement("li");
+          li.className = "uploaded-file-item";
+
+          const name = document.createElement("span");
+          name.className = "uploaded-file-name";
+          name.textContent = item.file_name || item.source;
+
+          const count = document.createElement("span");
+          count.className = "uploaded-file-count";
+          count.textContent = `${item.point_count} 个知识点`;
+
+          li.appendChild(name);
+          li.appendChild(count);
+          uploadedFileList.appendChild(li);
+        });
+      }
+
       function toggleKnowledgePanel() {
-        isKnowledgeCollapsed = !isKnowledgeCollapsed;
-        knowledgeBody.classList.toggle("hidden", isKnowledgeCollapsed);
-        knowledgeToggleHint.textContent = isKnowledgeCollapsed ? "点击展开" : "点击折叠";
+        uploadedFilesVisible = !uploadedFilesVisible;
+        knowledgeTitle.classList.toggle("expanded", uploadedFilesVisible);
+        uploadedFileSection.classList.toggle("hidden", !uploadedFilesVisible);
+        if (knowledgeToggleText) {
+          knowledgeToggleText.textContent = uploadedFilesVisible ? "隐藏文件" : "显示文件";
+        }
+        if (knowledgeToggleArrow) {
+          knowledgeToggleArrow.textContent = "▾";
+        }
+        if (knowledgeToggleHint) {
+          knowledgeToggleHint.setAttribute("aria-label", uploadedFilesVisible ? "点击隐藏已上传文件" : "点击显示已上传文件");
+        }
       }
 
       async function uploadKnowledgeFiles() {
