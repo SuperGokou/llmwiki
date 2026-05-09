@@ -76,7 +76,11 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "llama3.2:latest")
 REMOTE_API_KEY = os.getenv("API_KEY") or os.getenv("api")
 IS_LOCAL_OLLAMA = "127.0.0.1" in OLLAMA_API or "localhost" in OLLAMA_API
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "").strip().rstrip("/")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("GROQ_API_KEY", "").strip()
+
+# 与 render.yaml 一致：仅声明了 LLM_BACKEND=openai 但未填 Base 时默认 Groq（仍需在 Dashboard 配置密钥）。
+if os.getenv("LLM_BACKEND", "").strip().lower() == "openai" and not OPENAI_API_BASE:
+    OPENAI_API_BASE = "https://api.groq.com/openai/v1"
 
 
 def use_openai_compatible_backend() -> bool:
@@ -88,9 +92,9 @@ def warn_if_render_misconfigured() -> None:
     if os.getenv("RENDER") != "true":
         return
     if use_openai_compatible_backend():
-        if not (OPENAI_API_KEY and OPENAI_API_BASE):
+        if not OPENAI_API_KEY:
             print(
-                "RENDER WARNING: LLM_BACKEND=openai 但未设置 OPENAI_API_KEY 或 OPENAI_API_BASE。",
+                "RENDER WARNING: LLM_BACKEND=openai 但未设置 OPENAI_API_KEY / GROQ_API_KEY。",
                 flush=True,
             )
     elif IS_LOCAL_OLLAMA:
@@ -207,10 +211,16 @@ def call_ollama(
 ) -> str:
     """调用 Ollama /api/generate，或在 LLM_BACKEND=openai 时走 OpenAI 兼容接口。"""
     if use_openai_compatible_backend():
-        if not OPENAI_API_KEY or not OPENAI_API_BASE:
+        if not OPENAI_API_KEY:
             raise ValueError(
-                "LLM_BACKEND=openai 时必须在环境变量中设置 OPENAI_API_BASE 与 OPENAI_API_KEY。"
-                "（Render：Dashboard → 服务 → Environment）"
+                "未检测到 OPENAI_API_KEY（或 GROQ_API_KEY）。请在 Render 控制台为该 Web Service 添加密钥："
+                "Dashboard → gokou-llmwiki → Environment → Add Environment Variable，"
+                "Key 填 OPENAI_API_KEY，Value 填你在 Groq（https://console.groq.com/keys）"
+                "或 OpenAI 等平台生成的 API Key，保存后点 Manual Deploy 重新部署。"
+            )
+        if not OPENAI_API_BASE:
+            raise ValueError(
+                "OPENAI_API_BASE 为空。请在 Environment 设置，例如 https://api.groq.com/openai/v1"
             )
         return call_openai_compatible(
             prompt=prompt,
