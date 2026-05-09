@@ -112,7 +112,7 @@ CHAT_MODEL=llama3.2:latest
 | `OLLAMA_API_KEY` | 在 [Ollama](https://ollama.com) 控制台创建，在 Render **Environment** 里添加为 **Secret** |
 | `KNOWLEDGE_MODEL` / `OCR_MODEL` / `CHAT_MODEL` | 使用云上可用模型名（例如 `gpt-oss:120b`，须与你的账号一致） |
 
-**不要**同时设置 `LLM_BACKEND=openai`，否则会优先走 Groq/OpenAI 兼容分支。若曾配置过 Groq，请在 Dashboard **删掉** `LLM_BACKEND`、`OPENAI_API_BASE`、`OPENAI_API_KEY` 后再用 Ollama 云。
+**不要**在只用 Ollama 云时保留空的 `LLM_BACKEND=openai`（历史蓝图残留会导致困惑；现已改为**无 OPENAI 密钥时不会走 Groq**，但仍建议在 Dashboard **删除**多余的 `LLM_BACKEND`）。
 
 ### Render / 云端（备选：Groq / OpenAI 兼容）
 

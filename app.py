@@ -95,29 +95,38 @@ RUNTIME_ENV = "render" if is_render_runtime() else "local"
 
 
 def use_openai_compatible_backend() -> bool:
-    """云端（Render 等）使用 OpenAI 兼容 HTTP API（Groq / OpenAI / OpenRouter 等）。"""
-    return os.getenv("LLM_BACKEND", "").strip().lower() == "openai"
+    """仅当显式 openai 且已配置 OpenAI/Groq 密钥时才走兼容接口（避免 Render 上残留 LLM_BACKEND 却无密钥时误入选）。"""
+    return os.getenv("LLM_BACKEND", "").strip().lower() == "openai" and bool(OPENAI_API_KEY)
 
 
 def use_ollama_cloud_backend() -> bool:
-    """使用 Ollama 官方云（https://ollama.com）等：环境变量 OLLAMA_API_KEY + Client.chat。"""
-    if use_openai_compatible_backend():
-        return False
+    """Ollama 官方云：有 OLLAMA_API_KEY 即启用（与 LLM_BACKEND 是否曾设为 openai 无关）。"""
     return bool(OLLAMA_CLOUD_API_KEY)
 
 
 def warn_if_render_misconfigured() -> None:
     if not is_render_runtime():
         return
-    if use_openai_compatible_backend():
-        if not OPENAI_API_KEY:
-            print(
-                "RENDER WARNING: LLM_BACKEND=openai 但未设置 OPENAI_API_KEY / GROQ_API_KEY。",
-                flush=True,
-            )
-    elif use_ollama_cloud_backend():
-        pass
-    elif IS_LOCAL_OLLAMA:
+    wants_openai = os.getenv("LLM_BACKEND", "").strip().lower() == "openai"
+    if wants_openai and OPENAI_API_KEY:
+        return
+    if wants_openai and not OPENAI_API_KEY and OLLAMA_CLOUD_API_KEY:
+        print(
+            "RENDER NOTE: 环境变量里有 LLM_BACKEND=openai，但未配置 OPENAI_API_KEY；"
+            "已自动改用 OLLAMA_API_KEY（Ollama 官方云）。"
+            "若你只用 Ollama 云，请在 Dashboard 删除 LLM_BACKEND 以免混淆。",
+            flush=True,
+        )
+        return
+    if wants_openai and not OPENAI_API_KEY and not OLLAMA_CLOUD_API_KEY:
+        print(
+            "RENDER WARNING: LLM_BACKEND=openai 但未设置 OPENAI_API_KEY，也未设置 OLLAMA_API_KEY。",
+            flush=True,
+        )
+        return
+    if use_ollama_cloud_backend():
+        return
+    if IS_LOCAL_OLLAMA:
         print(
             "RENDER WARNING: 默认 OLLAMA_API_URL 指向本机，容器内无法访问。"
             "请任选其一：① 设置 OLLAMA_API_KEY（及可选 OLLAMA_HOST=https://ollama.com）使用官方云；"
@@ -286,15 +295,8 @@ def call_ollama(
     options: Optional[dict[str, Any]] = None,
     keep_alive: Optional[str] = None,
 ) -> str:
-    """本地 Ollama /generate；或 LLM_BACKEND=openai；或配置 OLLAMA_API_KEY 走官方云 Client.chat。"""
+    """本地 Ollama /generate；或（LLM_BACKEND=openai 且已配 OPENAI_API_KEY）Groq/OpenAI；或 OLLAMA_API_KEY 走官方云。"""
     if use_openai_compatible_backend():
-        if not OPENAI_API_KEY:
-            raise ValueError(
-                "未检测到 OPENAI_API_KEY（或 GROQ_API_KEY）。请在 Render 控制台为该 Web Service 添加密钥："
-                "Dashboard → gokou-llmwiki → Environment → Add Environment Variable，"
-                "Key 填 OPENAI_API_KEY，Value 填你在 Groq（https://console.groq.com/keys）"
-                "或 OpenAI 等平台生成的 API Key，保存后点 Manual Deploy 重新部署。"
-            )
         if not OPENAI_API_BASE:
             raise ValueError(
                 "OPENAI_API_BASE 为空。请在 Environment 设置，例如 https://api.groq.com/openai/v1"
@@ -314,6 +316,14 @@ def call_ollama(
             images=images,
             options=options,
             keep_alive=keep_alive,
+        )
+
+    if is_render_runtime() and IS_LOCAL_OLLAMA:
+        raise ValueError(
+            "当前在 Render 上运行，但未配置可用的云端 LLM。"
+            "请在本服务的 Environment 中添加 OLLAMA_API_KEY（Ollama 官方云），"
+            "或同时设置 LLM_BACKEND=openai 与 OPENAI_API_KEY（Groq/OpenAI）。"
+            "若曾配置过 Groq 仅填了 LLM_BACKEND=openai 却没有密钥，请删除该变量或补全 OPENAI_API_KEY。"
         )
 
     payload = {
