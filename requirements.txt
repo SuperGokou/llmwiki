@@ -1,0 +1,6 @@
+flask
+pypdf
+python-docx
+openpyxl
+pymupdf
+pillow

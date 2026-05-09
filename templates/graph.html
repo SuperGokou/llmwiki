@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gokou's 知识库</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #080c19;
+        --bg-2: #111b35;
+        --surface: #11172b;
+        --surface-soft: #18223f;
+        --surface-strong: #0b1123;
+        --text: #ffd36e;
+        --muted: #d6bf93;
+        --line: #2a3f72;
+        --article: #ff8a00;
+        --question: #f5c042;
+        --danger: #ef4444;
+        --accent-blue: #1f53c7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          linear-gradient(rgba(5, 10, 22, 0.42), rgba(5, 10, 22, 0.56)),
+          url("/static/images/dragonball-bg.jpg") center/cover fixed no-repeat;
+        color: var(--text);
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: radial-gradient(circle at 12% 18%, rgba(255, 166, 0, 0.22) 0, rgba(255, 166, 0, 0.22) 8px, transparent 9px),
+          radial-gradient(circle at 88% 28%, rgba(255, 184, 0, 0.16) 0, rgba(255, 184, 0, 0.16) 10px, transparent 11px),
+          radial-gradient(circle at 17% 78%, rgba(255, 208, 92, 0.12) 0, rgba(255, 208, 92, 0.12) 9px, transparent 10px),
+          radial-gradient(circle at 83% 82%, rgba(255, 104, 63, 0.14) 0, rgba(255, 104, 63, 0.14) 11px, transparent 12px);
+        opacity: 0.7;
+        z-index: -1;
+      }
+
+      .page {
+        max-width: 1280px;
+        margin: 24px auto;
+        padding: 0 16px 24px;
+        min-height: calc(100vh - 48px);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .card {
+        background: var(--surface);
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(255, 205, 87, 0.07);
+      }
+
+      .header {
+        padding: 16px 20px;
+        margin-bottom: 16px;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        color: #ffb318;
+        text-shadow: 0 0 10px rgba(255, 179, 24, 0.25), 0 2px 0 rgba(0, 0, 0, 0.35);
+      }
+
+      button {
+        font-size: 13px;
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-weight: 600;
+        border: 1px solid #3058ac;
+        background: linear-gradient(180deg, #27458c, #1a2f5f);
+        color: #f9dd96;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+      }
+
+      button:hover:not(:disabled) {
+        background: linear-gradient(180deg, #2f56ad, #233f82);
+        border-color: #4f79d6;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .main {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 16px;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .left-panel,
+      .graph-panel {
+        min-height: 0;
+      }
+
+      .left-panel {
+        padding: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .panel-title {
+        margin: 0 0 10px;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .panel-title-indicator {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .knowledge-body.hidden {
+        display: none;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .knowledge-list {
+        list-style: none;
+        padding: 0;
+        margin: 12px 0 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .upload-box {
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px dashed #4667b3;
+        background: var(--surface-soft);
+      }
+
+      .upload-box.dragover {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.12);
+      }
+
+      .upload-box input[type="file"] {
+        width: 100%;
+        margin-bottom: 10px;
+        font-size: 12px;
+      }
+
+      .drop-hint {
+        margin: 8px 0 12px;
+        min-height: 66px;
+        padding: 16px 12px;
+        border-radius: 10px;
+        border: 1px dashed #7e93c7;
+        text-align: center;
+        font-size: 14px;
+        line-height: 1.35;
+        font-weight: 600;
+        color: #b5c3e5;
+        background: rgba(35, 54, 101, 0.32);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .upload-status {
+        margin-top: 8px;
+        min-height: 20px;
+        font-size: 12px;
+        color: var(--muted);
+        white-space: pre-wrap;
+      }
+
+      .knowledge-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--surface-soft);
+        border: 1px solid #2e477d;
+        cursor: pointer;
+        transition: background-color 0.16s ease, border-color 0.16s ease;
+      }
+
+      .knowledge-item:hover,
+      .knowledge-item.active {
+        border-color: #efb540;
+        background: #1f2b4d;
+      }
+
+      .knowledge-item-title {
+        flex: 1;
+        min-width: 0;
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .btn-delete {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 7px;
+        font-size: 14px;
+        line-height: 1;
+        background: rgba(239, 68, 68, 0.16);
+        color: var(--danger);
+        border-color: rgba(239, 68, 68, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transform: scale(0.9);
+        transition: opacity 0.16s ease, transform 0.16s ease, background-color 0.16s ease;
+      }
+
+      .knowledge-item:hover .btn-delete,
+      .knowledge-item.active .btn-delete {
+        opacity: 1;
+        pointer-events: auto;
+        transform: scale(1);
+      }
+
+      .btn-delete:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.25);
+      }
+
+      .list-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 8px;
+      }
+
+      .page-indicator {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .graph-panel {
+        position: relative;
+        padding: 8px;
+        display: flex;
+      }
+
+      #graph {
+        width: 100%;
+        height: 100%;
+        border-radius: 8px;
+        background:
+          linear-gradient(rgba(6, 12, 26, 0.30), rgba(6, 12, 26, 0.46)),
+          url("/static/images/dragonball-bg.jpg") center/cover no-repeat;
+        border: 1px solid #3456a8;
+      }
+
+      .tooltip {
+        position: fixed;
+        pointer-events: none;
+        background: rgba(15, 23, 44, 0.96);
+        color: #ffd785;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        max-width: 320px;
+        display: none;
+        z-index: 20;
+        border: 1px solid #3f5fa9;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
+      }
+
+      .node-label {
+        font-size: 9px;
+        fill: #1f2937;
+        font-weight: 600;
+        user-select: none;
+      }
+
+      .node-circle {
+        filter: drop-shadow(0 1px 2px rgba(15, 15, 15, 0.16));
+      }
+
+      .node-circle.article-node {
+        animation: nodePulse 5.6s ease-in-out infinite;
+      }
+
+      .node-circle.question-node {
+        animation: nodePulse 6.4s ease-in-out infinite;
+      }
+
+      .node-circle.question-warn {
+        animation: warningPulse 3.8s ease-in-out infinite;
+      }
+
+      .link-line {
+        stroke-dasharray: 3 7;
+        animation: linkFlow 18s linear infinite;
+      }
+
+      @keyframes nodePulse {
+        0%,
+        100% {
+          filter: drop-shadow(0 1px 2px rgba(15, 15, 15, 0.14));
+        }
+        50% {
+          filter: drop-shadow(0 2px 4px rgba(15, 15, 15, 0.22));
+        }
+      }
+
+      @keyframes linkFlow {
+        0% {
+          stroke-dashoffset: 0;
+        }
+        100% {
+          stroke-dashoffset: -120;
+        }
+      }
+
+      @keyframes warningPulse {
+        0%,
+        100% {
+          fill: #ef4444;
+          filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.25));
+        }
+        50% {
+          fill: #dc2626;
+          filter: drop-shadow(0 1px 3px rgba(239, 68, 68, 0.4));
+        }
+      }
+
+      .trail-particle {
+        pointer-events: none;
+      }
+
+      .ripple-wave {
+        pointer-events: none;
+        fill: none;
+        stroke-width: 2;
+      }
+
+      .legend {
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        background: rgba(14, 23, 45, 0.9);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        color: var(--muted);
+        border: 1px solid #4062b2;
+      }
+
+      .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .legend-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(5, 8, 18, 0.45);
+        z-index: 100;
+      }
+
+      .modal-overlay.show {
+        display: flex;
+      }
+
+      .preview-modal {
+        width: min(860px, 100%);
+        max-height: 86vh;
+        display: flex;
+        flex-direction: column;
+        border-radius: 12px;
+        border: 1px solid #4163b4;
+        background: var(--surface);
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+        position: relative;
+      }
+
+      .preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        cursor: move;
+        user-select: none;
+      }
+
+      .preview-title-wrap h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+
+      .preview-source {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .preview-content {
+        padding: 16px;
+        overflow: auto;
+        line-height: 1.75;
+        white-space: pre-wrap;
+        font-size: 14px;
+      }
+
+      .preview-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--line);
+      }
+
+      .preview-nav {
+        display: flex;
+        gap: 8px;
+      }
+
+      .chat-toggle {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        z-index: 90;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible;
+        padding: 0;
+        isolation: isolate;
+      }
+
+      .chat-toggle:hover,
+      .chat-toggle:active,
+      .chat-toggle:focus,
+      .chat-toggle:focus-visible {
+        background: transparent !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+      }
+
+      .chat-toggle::after {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        background: url("/static/images/shenron-discord.gif") center/contain no-repeat;
+        transform: scale(0.74);
+        transform-origin: center;
+        pointer-events: none;
+        z-index: 3;
+        opacity: 0.95;
+        mix-blend-mode: normal;
+        filter: saturate(1.15) contrast(1.08);
+      }
+
+      .chat-toggle img {
+        width: 72%;
+        height: 72%;
+        border-radius: 50%;
+        border: none;
+        object-fit: cover;
+        object-position: center;
+        transform: none;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34);
+        position: relative;
+        z-index: 1;
+      }
+
+      .chat-panel {
+        position: fixed;
+        right: 24px;
+        bottom: 84px;
+        width: min(360px, calc(100vw - 32px));
+        height: 460px;
+        display: none;
+        flex-direction: column;
+        border-radius: 12px;
+        border: 1px solid #4165ba;
+        background: #101831;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        overflow: hidden;
+        z-index: 90;
+        resize: both;
+        min-width: 320px;
+        min-height: 320px;
+        max-width: min(92vw, 760px);
+        max-height: 86vh;
+      }
+
+      .chat-panel.show {
+        display: flex;
+      }
+
+      .chat-header {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: move;
+        user-select: none;
+      }
+
+      .chat-header-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .chat-header img {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+      }
+
+      .chat-close-btn {
+        margin-left: auto;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 8px;
+        border: 1px solid #4b68a8;
+        background: #162650;
+        color: #ffe3a5;
+        line-height: 1;
+        font-size: 18px;
+      }
+
+      .chat-close-btn:hover {
+        background: #22366d;
+        border-color: #6d8ed8;
+      }
+
+      .chat-messages {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: #0d1530;
+      }
+
+      .chat-bubble {
+        max-width: 88%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        white-space: pre-wrap;
+        line-height: 1.6;
+        font-size: 13px;
+      }
+
+      .chat-bubble.user {
+        margin-left: auto;
+        background: #1d3f89;
+        border: 1px solid #486ec7;
+        color: #ffe3a5;
+      }
+
+      .chat-bubble.bot {
+        margin-right: auto;
+        background: #2c1f0f;
+        border: 1px solid #d08b1d;
+        color: #ffd88f;
+      }
+
+      .chat-bubble strong {
+        color: #ffeab9;
+        font-weight: 700;
+      }
+
+      .chat-input-row {
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        border-top: 1px solid var(--line);
+      }
+
+      .chat-input-row textarea {
+        flex: 1;
+        resize: none;
+        min-height: 40px;
+        max-height: 90px;
+        border: 1px solid #3f5fa9;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-family: inherit;
+        background: #101831;
+        color: #ffe2a4;
+      }
+
+      .chat-input-row textarea:focus {
+        outline: 2px solid #e9ad2d;
+        border-color: #e9ad2d;
+      }
+
+      @media (max-width: 1000px) {
+        .page {
+          min-height: auto;
+          display: block;
+        }
+
+        .main {
+          grid-template-columns: 1fr;
+          display: block;
+        }
+
+        .graph-panel {
+          display: block;
+          min-height: 520px;
+        }
+
+        #graph {
+          height: 520px;
+        }
+
+        .chat-toggle {
+          right: 14px;
+          bottom: 14px;
+          width: 84px;
+          height: 84px;
+        }
+
+        .chat-panel {
+          right: 14px;
+          bottom: 74px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="card header">
+        <h1>Gokou's 知识库</h1>
+      </section>
+
+      <section class="main">
+        <aside class="card left-panel">
+          <h2 id="knowledgeTitle" class="panel-title">
+            <span>知识库</span>
+            <span id="knowledgeToggleHint" class="panel-title-indicator">点击折叠</span>
+          </h2>
+          <div id="knowledgeBody" class="knowledge-body">
+            <div class="muted">支持导入 PDF、Word、Markdown、表格、图片文件，自动生成预测问题。</div>
+            <div class="upload-box">
+              <input
+                id="knowledgeUploadInput"
+                type="file"
+                multiple
+                accept=".pdf,.docx,.txt,.md,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.webp,.bmp,.tiff"
+              />
+              <div id="dropHint" class="drop-hint">拖入文件到这里 / Drop files here</div>
+              <button id="uploadBtn" class="btn-primary" style="width: 100%">导入到知识库</button>
+              <div id="uploadStatus" class="upload-status"></div>
+            </div>
+            <ul id="knowledgeList" class="knowledge-list"></ul>
+            <div class="list-pagination">
+              <button id="prevPageBtn" type="button" aria-label="上一页">上一页</button>
+              <span id="pageIndicator" class="page-indicator">1 / 1</span>
+              <button id="nextPageBtn" type="button" aria-label="下一页">下一页</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="card graph-panel">
+          <svg id="graph"></svg>
+          <div class="legend">
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #ff8a00"></span>
+              <span>文章节点</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #f5c042"></span>
+              <span>问题节点</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+    <div id="previewModalOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-label="知识预览">
+      <section class="preview-modal">
+        <header class="preview-header">
+          <div class="preview-title-wrap">
+            <h3 id="previewTitle">知识预览</h3>
+            <div id="previewSource" class="preview-source"></div>
+          </div>
+          <button id="closePreviewBtn" type="button" aria-label="关闭预览">关闭</button>
+        </header>
+        <div id="previewContent" class="preview-content">正在加载内容...</div>
+        <footer class="preview-footer">
+          <div id="previewIndex" class="page-indicator">0 / 0</div>
+          <div class="preview-nav">
+            <button id="previewPrevBtn" type="button" aria-label="上一条">上一条</button>
+            <button id="previewNextBtn" type="button" aria-label="下一条">下一条</button>
+          </div>
+        </footer>
+      </section>
+    </div>
+
+    <button id="chatToggleBtn" class="chat-toggle" type="button" aria-label="打开聊天机器人">
+      <img src="/static/images/7star.png" alt="Bot Logo" />
+    </button>
+    <section id="chatPanel" class="chat-panel" aria-label="知识库聊天机器人">
+      <header id="chatHeader" class="chat-header">
+        <span class="chat-header-title">
+          <img src="/static/images/7star.png" alt="Bot Logo" />
+          <span>Gokou's Bot</span>
+        </span>
+        <button id="chatCloseBtn" class="chat-close-btn" type="button" aria-label="关闭聊天窗口">×</button>
+      </header>
+      <div id="chatMessages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <textarea id="chatInput" placeholder="输入问题，回车发送（Shift+Enter 换行）"></textarea>
+        <button id="chatSendBtn" type="button">发送</button>
+      </div>
+    </section>
+
+    <script>
+      const svg = d3.select("#graph");
+      const tooltip = document.getElementById("tooltip");
+      const knowledgeTitle = document.getElementById("knowledgeTitle");
+      const knowledgeBody = document.getElementById("knowledgeBody");
+      const knowledgeToggleHint = document.getElementById("knowledgeToggleHint");
+      const knowledgeList = document.getElementById("knowledgeList");
+      const uploadBox = document.querySelector(".upload-box");
+      const knowledgeUploadInput = document.getElementById("knowledgeUploadInput");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const dropHint = document.getElementById("dropHint");
+      const uploadStatus = document.getElementById("uploadStatus");
+      const prevPageBtn = document.getElementById("prevPageBtn");
+      const nextPageBtn = document.getElementById("nextPageBtn");
+      const pageIndicator = document.getElementById("pageIndicator");
+      const previewModalOverlay = document.getElementById("previewModalOverlay");
+      const previewTitle = document.getElementById("previewTitle");
+      const previewSource = document.getElementById("previewSource");
+      const previewContent = document.getElementById("previewContent");
+      const previewIndex = document.getElementById("previewIndex");
+      const closePreviewBtn = document.getElementById("closePreviewBtn");
+      const previewPrevBtn = document.getElementById("previewPrevBtn");
+      const previewNextBtn = document.getElementById("previewNextBtn");
+      const chatToggleBtn = document.getElementById("chatToggleBtn");
+      const chatPanel = document.getElementById("chatPanel");
+      const chatHeader = document.getElementById("chatHeader");
+      const chatCloseBtn = document.getElementById("chatCloseBtn");
+      const chatMessages = document.getElementById("chatMessages");
+      const chatInput = document.getElementById("chatInput");
+      const chatSendBtn = document.getElementById("chatSendBtn");
+
+      let graphData = { nodes: [], links: [] };
+      let articles = [];
+      let nodeSelection = null;
+      let linkSelection = null;
+      let labelSelection = null;
+      let simulation = null;
+      let graphPulseTimer = null;
+      let trailLayer = null;
+      let rippleLayer = null;
+      let adjacency = new Set();
+      const boundaryPadding = 26;
+      let activeArticleId = null;
+      let currentPage = 1;
+      const pageSize = 8;
+      let previewArticleIndex = -1;
+      let droppedFiles = [];
+      let isKnowledgeCollapsed = false;
+
+      // 初始化页面：加载图谱数据并渲染左侧知识库与右侧图。
+      async function init() {
+        const graphResponse = await fetch("/api/graph");
+        if (!graphResponse.ok) {
+          throw new Error(`图谱接口返回异常状态: ${graphResponse.status}`);
+        }
+        graphData = await graphResponse.json();
+        articles = graphData.nodes.filter((n) => n.type === "article").sort((a, b) => a.raw_id - b.raw_id);
+        const maxPage = Math.max(1, Math.ceil(articles.length / pageSize));
+        currentPage = Math.min(currentPage, maxPage);
+        renderKnowledgeList();
+        drawGraph();
+      }
+
+      function toggleKnowledgePanel() {
+        isKnowledgeCollapsed = !isKnowledgeCollapsed;
+        knowledgeBody.classList.toggle("hidden", isKnowledgeCollapsed);
+        knowledgeToggleHint.textContent = isKnowledgeCollapsed ? "点击展开" : "点击折叠";
+      }
+
+      async function uploadKnowledgeFiles() {
+        const files =
+          droppedFiles.length > 0 ? droppedFiles : Array.from(knowledgeUploadInput.files || []);
+        if (!files || files.length === 0) {
+          uploadStatus.textContent = "请先选择要导入的文件。";
+          return;
+        }
+
+        const formData = new FormData();
+        files.forEach((file) => formData.append("files", file));
+
+        uploadBtn.disabled = true;
+        uploadStatus.textContent = "正在解析并导入，请稍候...";
+        try {
+          const response = await fetch("/api/upload-knowledge", {
+            method: "POST",
+            body: formData,
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || "上传失败");
+          }
+
+          let statusText = `导入成功 ${result.imported_count} 个文件`;
+          if (result.failed_count > 0) {
+            const failedText = result.failed
+              .map((item) => `${item.file}: ${item.reason}`)
+              .join("\n");
+            statusText += `，失败 ${result.failed_count} 个\n${failedText}`;
+          }
+          uploadStatus.textContent = statusText;
+          knowledgeUploadInput.value = "";
+          droppedFiles = [];
+          dropHint.textContent = "拖入文件到这里 / Drop files here";
+          await init();
+        } catch (error) {
+          uploadStatus.textContent = `导入失败：${error.message}`;
+        } finally {
+          uploadBtn.disabled = false;
+        }
+      }
+
+      function renderKnowledgeList() {
+        knowledgeList.innerHTML = "";
+
+        const maxPage = Math.max(1, Math.ceil(articles.length / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), maxPage);
+        pageIndicator.textContent = `${currentPage} / ${maxPage}`;
+        prevPageBtn.disabled = currentPage <= 1;
+        nextPageBtn.disabled = currentPage >= maxPage;
+
+        if (articles.length === 0) {
+          const li = document.createElement("li");
+          li.className = "knowledge-item";
+          li.textContent = "暂无知识条目，请先上传文件。";
+          knowledgeList.appendChild(li);
+          return;
+        }
+
+        const start = (currentPage - 1) * pageSize;
+        const pageItems = articles.slice(start, start + pageSize);
+        pageItems.forEach((article) => {
+          const li = document.createElement("li");
+          li.className = "knowledge-item";
+          li.dataset.articleId = String(article.raw_id);
+
+          const title = document.createElement("span");
+          title.className = "knowledge-item-title";
+          title.textContent = article.label;
+          li.appendChild(title);
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn-delete";
+          deleteBtn.type = "button";
+          deleteBtn.textContent = "×";
+          deleteBtn.setAttribute("aria-label", `删除 ${article.label}`);
+          deleteBtn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            await deleteArticle(article.raw_id, article.label);
+          });
+          li.appendChild(deleteBtn);
+
+          li.addEventListener("click", () => openArticlePreviewById(article.raw_id));
+          li.classList.toggle("active", String(activeArticleId) === String(article.raw_id));
+          knowledgeList.appendChild(li);
+        });
+      }
+
+      function changePage(delta) {
+        const maxPage = Math.max(1, Math.ceil(articles.length / pageSize));
+        const nextPage = Math.min(maxPage, Math.max(1, currentPage + delta));
+        if (nextPage === currentPage) {
+          return;
+        }
+        currentPage = nextPage;
+        renderKnowledgeList();
+      }
+
+      function syncPageToArticle(articleId) {
+        const idx = articles.findIndex((item) => String(item.raw_id) === String(articleId));
+        if (idx < 0) {
+          return;
+        }
+        currentPage = Math.floor(idx / pageSize) + 1;
+      }
+
+      async function deleteArticle(articleId, articleLabel) {
+        const ok = window.confirm(`确定删除「${articleLabel}」及其关联问题吗？`);
+        if (!ok) {
+          return;
+        }
+        try {
+          const response = await fetch(`/api/article/${articleId}`, { method: "DELETE" });
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || "删除失败");
+          }
+          if (String(activeArticleId) === String(articleId)) {
+            activeArticleId = null;
+          }
+          if (previewModalOverlay.classList.contains("show")) {
+            const currentArticle = articles[previewArticleIndex];
+            if (currentArticle && String(currentArticle.raw_id) === String(articleId)) {
+              closePreviewModal();
+            }
+          }
+          uploadStatus.textContent = `已删除：${articleLabel}`;
+          await init();
+        } catch (error) {
+          uploadStatus.textContent = `删除失败：${error.message}`;
+        }
+      }
+
+      function drawGraph() {
+        if (simulation) {
+          simulation.stop();
+        }
+        const width = document.getElementById("graph").clientWidth;
+        const height = document.getElementById("graph").clientHeight;
+
+        svg.selectAll("*").remove();
+        svg.attr("viewBox", [0, 0, width, height]);
+
+        const zoomLayer = svg.append("g");
+        const linkLayer = zoomLayer.append("g");
+        const effectLayer = zoomLayer.append("g");
+        const nodeLayer = zoomLayer.append("g");
+        const labelLayer = zoomLayer.append("g");
+        trailLayer = effectLayer.append("g");
+        rippleLayer = effectLayer.append("g");
+
+        // 建立邻接集合，用于 hover 时快速判断相邻关系。
+        adjacency = new Set();
+        graphData.links.forEach((l) => {
+          adjacency.add(`${l.source}|${l.target}`);
+          adjacency.add(`${l.target}|${l.source}`);
+        });
+
+        simulation = d3
+          .forceSimulation(graphData.nodes)
+          .force(
+            "link",
+            d3
+              .forceLink(graphData.links)
+              .id((d) => d.id)
+              .distance(80)
+              .strength(0.45)
+          )
+          .force("charge", d3.forceManyBody().strength(-120))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          // 额外的中心回拉，避免节点在长时间运行后逐渐飘散。
+          .force("centerX", d3.forceX(width / 2).strength(0.06))
+          .force("centerY", d3.forceY(height / 2).strength(0.06))
+          .force("collision", d3.forceCollide().radius((d) => (d.type === "article" ? 22 : 16)))
+          // 保留轻微动态感，避免图谱长时间完全静止。
+          .alphaDecay(0.03)
+          .velocityDecay(0.45);
+
+        linkSelection = linkLayer
+          .selectAll("line")
+          .data(graphData.links)
+          .join("line")
+          .attr("class", "link-line")
+          .attr("stroke", "rgba(255, 186, 64, 0.46)")
+          .attr("stroke-width", 1.2)
+          .attr("opacity", 0.7);
+
+        nodeSelection = nodeLayer
+          .selectAll("circle")
+          .data(graphData.nodes)
+          .join("circle")
+          .attr("class", (d) => `node-circle ${getNodeClass(d)}`)
+          .attr("r", (d) => (d.type === "article" ? 10 : 6))
+          .attr("fill", (d) => getNodeColor(d))
+          .attr("stroke", "#ffffff")
+          .attr("stroke-width", 1.2)
+          .style("cursor", "pointer")
+          .call(
+            d3
+              .drag()
+              .on("start", dragStarted)
+              .on("drag", dragged)
+              .on("end", dragEnded)
+          );
+
+        labelSelection = labelLayer
+          .selectAll("text")
+          .data(graphData.nodes)
+          .join("text")
+          .attr("class", "node-label")
+          .text((d) => shortenLabel(d.label))
+          .attr("dx", 10)
+          .attr("dy", 4)
+          // 默认仅显示主节点（文章）标签，子节点标签在交互时再显示，减少拥挤。
+          .attr("opacity", (d) => (d.type === "article" ? 0.95 : 0));
+
+        nodeSelection
+          .on("mouseover", handleNodeMouseOver)
+          .on("mousemove", handleNodeMouseMove)
+          .on("mouseout", handleNodeMouseOut)
+          .on("click", handleNodeClick);
+
+        simulation.on("tick", () => {
+          // 每帧做边界夹紧，防止节点速度叠加后飞出可视区域。
+          graphData.nodes.forEach((node) => {
+            clampNodeToViewport(node, width, height);
+          });
+
+          linkSelection
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+
+          nodeSelection.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+
+          labelSelection.attr("x", (d) => d.x).attr("y", (d) => d.y);
+        });
+
+        // 周期性给仿真一个小推力，避免图谱完全静止。
+        if (graphPulseTimer) {
+          clearInterval(graphPulseTimer);
+        }
+        graphPulseTimer = setInterval(() => {
+          if (simulation) {
+            simulation.alphaTarget(0.025).restart();
+            setTimeout(() => simulation && simulation.alphaTarget(0.004), 260);
+          }
+        }, 7200);
+
+        // 启用缩放和平移，满足图谱浏览需求。
+        svg.call(
+          d3
+            .zoom()
+            .scaleExtent([0.5, 3.5])
+            .on("zoom", (event) => {
+              zoomLayer.attr("transform", event.transform);
+            })
+        );
+      }
+
+      function shortenLabel(text) {
+        return text.length > 14 ? `${text.slice(0, 14)}...` : text;
+      }
+
+      function getNodeClass(node) {
+        if (node.type === "article") {
+          return "article-node";
+        }
+        return `question-node ${getQuestionTypeClass(node.question_type)}`;
+      }
+
+      function getQuestionTypeClass(questionType) {
+        const type = (questionType || "").toLowerCase();
+        if (type.includes("预警") || type.includes("风险") || type.includes("告警")) {
+          return "question-warn";
+        }
+        return "question-normal";
+      }
+
+      function getNodeColor(node) {
+        if (node.type === "article") {
+          return "#ff8a00";
+        }
+        const type = (node.question_type || "").toLowerCase();
+        if (type.includes("预警") || type.includes("风险") || type.includes("告警")) {
+          return "#ef4444";
+        }
+        if (type.includes("排障")) {
+          return "#f59e0b";
+        }
+        if (type.includes("策略") || type.includes("方法")) {
+          return "#2a63d8";
+        }
+        return "#f5c042";
+      }
+
+      function nodeId(value) {
+        return typeof value === "string" ? value : value.id;
+      }
+
+      function isNeighbor(source, target) {
+        if (source.id === target.id) {
+          return true;
+        }
+        return adjacency.has(`${source.id}|${target.id}`);
+      }
+
+      function handleNodeMouseOver(event, node) {
+        nodeSelection.attr("opacity", (d) => (isNeighbor(node, d) ? 1 : 0.12));
+        // hover 时仅显示当前节点及邻居标签，其余隐藏，降低视觉噪声。
+        labelSelection.attr("opacity", (d) => (isNeighbor(node, d) ? 1 : 0));
+        linkSelection.attr("opacity", (l) => {
+          const s = nodeId(l.source);
+          const t = nodeId(l.target);
+          return s === node.id || t === node.id ? 1 : 0.08;
+        });
+
+        tooltip.style.display = "block";
+        tooltip.textContent = node.label;
+        handleNodeMouseMove(event);
+      }
+
+      function handleNodeMouseMove(event) {
+        tooltip.style.left = `${event.clientX + 12}px`;
+        tooltip.style.top = `${event.clientY + 12}px`;
+      }
+
+      function handleNodeMouseOut() {
+        tooltip.style.display = "none";
+        nodeSelection.attr("opacity", 1);
+        labelSelection.attr("opacity", (d) => (d.type === "article" ? 0.95 : 0));
+        linkSelection.attr("opacity", 0.7);
+      }
+
+      async function handleNodeClick(event, node) {
+        spawnClickRipple(node);
+        if (node.type === "article") {
+          await openArticlePreviewById(node.raw_id);
+          return;
+        }
+
+        // 点击子节点（问题节点）时，直接在弹窗中显示问题内容与来源上下文。
+        await openQuestionPreview(node);
+      }
+
+      async function loadArticleDetail(articleId) {
+        const response = await fetch(`/api/article/${articleId}`);
+        if (!response.ok) {
+          throw new Error("未找到对应文章，请检查数据是否已初始化。");
+        }
+        return response.json();
+      }
+
+      function setActiveArticle(articleId) {
+        activeArticleId = articleId;
+        Array.from(knowledgeList.children).forEach((item) => {
+          item.classList.toggle("active", String(item.dataset.articleId) === String(articleId));
+        });
+      }
+
+      function focusNodeById(targetId) {
+        if (!nodeSelection) {
+          return;
+        }
+        const targetNode = graphData.nodes.find((n) => n.id === targetId);
+        if (!targetNode) {
+          return;
+        }
+
+        nodeSelection.attr("stroke-width", (d) => (d.id === targetId ? 3 : 1.2));
+      }
+
+      async function openArticlePreviewById(articleId) {
+        const idx = articles.findIndex((item) => String(item.raw_id) === String(articleId));
+        if (idx < 0) {
+          return;
+        }
+        previewArticleIndex = idx;
+        syncPageToArticle(articleId);
+        renderKnowledgeList();
+        setActiveArticle(articleId);
+        focusNodeById(`article-${articleId}`);
+        await renderPreviewModal();
+        previewModalOverlay.classList.add("show");
+      }
+
+      async function openQuestionPreview(questionNode) {
+        setActiveArticle(questionNode.article_id || null);
+        previewTitle.textContent = questionNode.label || "问题节点";
+        previewSource.textContent = `问题类型：${questionNode.question_type || "未分类"}`;
+        previewContent.textContent = "正在加载关联知识点...";
+        previewIndex.textContent = "问题预览";
+        previewPrevBtn.disabled = true;
+        previewNextBtn.disabled = true;
+        previewModalOverlay.classList.add("show");
+
+        if (!questionNode.article_id) {
+          previewContent.textContent = "未找到关联知识点。";
+          return;
+        }
+
+        try {
+          const detail = await loadArticleDetail(questionNode.article_id);
+          previewContent.textContent =
+            `关联知识点：${detail.title}\n来源：${detail.source}\n\n` + (detail.content || "暂无内容");
+          focusNodeById(`article-${questionNode.article_id}`);
+        } catch (error) {
+          previewContent.textContent = `读取关联知识点失败：${error.message}`;
+        }
+      }
+
+      async function renderPreviewModal() {
+        const article = articles[previewArticleIndex];
+        if (!article) {
+          return;
+        }
+        previewTitle.textContent = article.label;
+        previewSource.textContent = "正在加载来源...";
+        previewContent.textContent = "正在加载内容...";
+        previewIndex.textContent = `${previewArticleIndex + 1} / ${articles.length}`;
+        previewPrevBtn.disabled = previewArticleIndex <= 0;
+        previewNextBtn.disabled = previewArticleIndex >= articles.length - 1;
+
+        try {
+          const detail = await loadArticleDetail(article.raw_id);
+          previewTitle.textContent = detail.title;
+          previewSource.textContent = `来源：${detail.source}`;
+          previewContent.textContent = detail.content || "暂无内容";
+        } catch (error) {
+          previewSource.textContent = "";
+          previewContent.textContent = `读取失败：${error.message}`;
+        }
+      }
+
+      function closePreviewModal() {
+        previewModalOverlay.classList.remove("show");
+        const modal = previewModalOverlay.querySelector(".preview-modal");
+        if (modal) {
+          modal.style.left = "";
+          modal.style.top = "";
+          modal.style.margin = "";
+          modal.style.position = "";
+        }
+      }
+
+      async function previewNavigate(delta) {
+        const next = previewArticleIndex + delta;
+        if (next < 0 || next >= articles.length) {
+          return;
+        }
+        previewArticleIndex = next;
+        const article = articles[previewArticleIndex];
+        syncPageToArticle(article.raw_id);
+        renderKnowledgeList();
+        setActiveArticle(article.raw_id);
+        focusNodeById(`article-${article.raw_id}`);
+        await renderPreviewModal();
+      }
+
+      function dragStarted(event) {
+        if (!event.active) {
+          simulation.alphaTarget(0.3).restart();
+          event.subject.fx = event.subject.x;
+          event.subject.fy = event.subject.y;
+        }
+      }
+
+      function dragged(event) {
+        const width = document.getElementById("graph").clientWidth;
+        const height = document.getElementById("graph").clientHeight;
+        const clampedX = clamp(event.x, boundaryPadding, width - boundaryPadding);
+        const clampedY = clamp(event.y, boundaryPadding, height - boundaryPadding);
+        event.subject.fx = clampedX;
+        event.subject.fy = clampedY;
+        spawnDragTrail(event.subject, clampedX, clampedY);
+      }
+
+      function dragEnded(event) {
+        if (!event.active) {
+          simulation.alphaTarget(0);
+          event.subject.fx = null;
+          event.subject.fy = null;
+        }
+      }
+
+      function spawnDragTrail(node, x, y) {
+        if (!trailLayer) {
+          return;
+        }
+        const color = getNodeColor(node);
+        trailLayer
+          .append("circle")
+          .attr("class", "trail-particle")
+          .attr("cx", x)
+          .attr("cy", y)
+          .attr("r", node.type === "article" ? 4.5 : 3.2)
+          .attr("fill", color)
+          .attr("opacity", 0.42)
+          .transition()
+          .duration(320)
+          .ease(d3.easeCubicOut)
+          .attr("r", 0.6)
+          .attr("opacity", 0)
+          .remove();
+      }
+
+      function spawnClickRipple(node) {
+        if (!rippleLayer || typeof node.x !== "number" || typeof node.y !== "number") {
+          return;
+        }
+        const color = getNodeColor(node);
+        rippleLayer
+          .append("circle")
+          .attr("class", "ripple-wave")
+          .attr("cx", node.x)
+          .attr("cy", node.y)
+          .attr("r", node.type === "article" ? 6 : 4)
+          .attr("stroke", color)
+          .attr("opacity", 0.45)
+          .transition()
+          .duration(420)
+          .ease(d3.easeCubicOut)
+          .attr("r", node.type === "article" ? 32 : 24)
+          .attr("opacity", 0)
+          .remove();
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function clampNodeToViewport(node, width, height) {
+        const minX = boundaryPadding;
+        const maxX = width - boundaryPadding;
+        const minY = boundaryPadding;
+        const maxY = height - boundaryPadding;
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        const originalX = node.x;
+        const originalY = node.y;
+        node.x = clamp(node.x, minX, maxX);
+        node.y = clamp(node.y, minY, maxY);
+
+        const wasOutOfBounds = originalX !== node.x || originalY !== node.y;
+        if (wasOutOfBounds) {
+          // 超界后附加缓动回拉，让节点更自然地回到中心区域。
+          node.vx = (node.vx || 0) * 0.42 + (centerX - node.x) * 0.016;
+          node.vy = (node.vy || 0) * 0.42 + (centerY - node.y) * 0.016;
+        }
+
+        if (node.fx != null) {
+          node.fx = clamp(node.fx, minX, maxX);
+        }
+        if (node.fy != null) {
+          node.fy = clamp(node.fy, minY, maxY);
+        }
+      }
+
+      function appendChatBubble(role, text) {
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble ${role}`;
+        bubble.innerHTML = renderChatMarkdown(String(text || ""));
+        chatMessages.appendChild(bubble);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function escapeHtml(value) {
+        return value
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function renderChatMarkdown(rawText) {
+        // 先做 HTML 转义，再只开放少量 Markdown（当前支持 **加粗**）。
+        const escaped = escapeHtml(rawText);
+        return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      }
+
+      function makeElementDraggable({ handleEl, moveEl, boundsPadding = 8 }) {
+        if (!handleEl || !moveEl) {
+          return;
+        }
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        const onMouseMove = (event) => {
+          if (!dragging) {
+            return;
+          }
+          const dx = event.clientX - startX;
+          const dy = event.clientY - startY;
+          const nextLeft = startLeft + dx;
+          const nextTop = startTop + dy;
+          const maxLeft = window.innerWidth - moveEl.offsetWidth - boundsPadding;
+          const maxTop = window.innerHeight - moveEl.offsetHeight - boundsPadding;
+          moveEl.style.left = `${Math.min(Math.max(boundsPadding, nextLeft), Math.max(boundsPadding, maxLeft))}px`;
+          moveEl.style.top = `${Math.min(Math.max(boundsPadding, nextTop), Math.max(boundsPadding, maxTop))}px`;
+        };
+
+        const onMouseUp = () => {
+          dragging = false;
+          document.removeEventListener("mousemove", onMouseMove);
+          document.removeEventListener("mouseup", onMouseUp);
+        };
+
+        handleEl.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) {
+            return;
+          }
+          const rect = moveEl.getBoundingClientRect();
+          dragging = true;
+          startX = event.clientX;
+          startY = event.clientY;
+          startLeft = rect.left;
+          startTop = rect.top;
+          moveEl.style.position = "fixed";
+          moveEl.style.left = `${rect.left}px`;
+          moveEl.style.top = `${rect.top}px`;
+          moveEl.style.right = "auto";
+          moveEl.style.bottom = "auto";
+          moveEl.style.margin = "0";
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
+          event.preventDefault();
+        });
+      }
+
+      async function sendChatMessage() {
+        const message = chatInput.value.trim();
+        if (!message) {
+          return;
+        }
+        appendChatBubble("user", message);
+        chatInput.value = "";
+        chatSendBtn.disabled = true;
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message }),
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || "聊天请求失败");
+          }
+          appendChatBubble("bot", result.reply || "未返回内容");
+        } catch (error) {
+          appendChatBubble("bot", `请求失败：${error.message}`);
+        } finally {
+          chatSendBtn.disabled = false;
+          chatInput.focus();
+        }
+      }
+
+      uploadBtn.addEventListener("click", uploadKnowledgeFiles);
+      knowledgeTitle.addEventListener("click", toggleKnowledgePanel);
+      knowledgeUploadInput.addEventListener("change", () => {
+        droppedFiles = [];
+        const selectedCount = knowledgeUploadInput.files ? knowledgeUploadInput.files.length : 0;
+        dropHint.textContent =
+          selectedCount > 0
+            ? `已选择 ${selectedCount} 个文件，可点击“导入到知识库”`
+            : "拖入文件到这里 / Drop files here";
+      });
+      ["dragenter", "dragover"].forEach((eventName) => {
+        uploadBox.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          uploadBox.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((eventName) => {
+        uploadBox.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          uploadBox.classList.remove("dragover");
+        });
+      });
+      uploadBox.addEventListener("drop", (event) => {
+        const fileList = event.dataTransfer ? Array.from(event.dataTransfer.files || []) : [];
+        if (fileList.length === 0) {
+          return;
+        }
+        droppedFiles = fileList;
+        knowledgeUploadInput.value = "";
+        dropHint.textContent = `已拖入 ${fileList.length} 个文件，可点击“导入到知识库”`;
+      });
+      prevPageBtn.addEventListener("click", () => changePage(-1));
+      nextPageBtn.addEventListener("click", () => changePage(1));
+      closePreviewBtn.addEventListener("click", closePreviewModal);
+      previewPrevBtn.addEventListener("click", () => previewNavigate(-1));
+      previewNextBtn.addEventListener("click", () => previewNavigate(1));
+      previewModalOverlay.addEventListener("click", (event) => {
+        if (event.target === previewModalOverlay) {
+          closePreviewModal();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && previewModalOverlay.classList.contains("show")) {
+          closePreviewModal();
+        }
+      });
+      chatToggleBtn.addEventListener("click", () => {
+        chatPanel.classList.toggle("show");
+      });
+      chatCloseBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        chatPanel.classList.remove("show");
+      });
+      chatCloseBtn.addEventListener("mousedown", (event) => {
+        event.stopPropagation();
+      });
+      chatSendBtn.addEventListener("click", sendChatMessage);
+      chatInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          sendChatMessage();
+        }
+      });
+
+      appendChatBubble("bot", "你好，我是 Gokou's Bot。可以直接问我知识库相关问题。");
+
+      const previewModal = previewModalOverlay.querySelector(".preview-modal");
+      const previewHeader = previewModalOverlay.querySelector(".preview-header");
+      makeElementDraggable({ handleEl: previewHeader, moveEl: previewModal });
+      makeElementDraggable({ handleEl: chatHeader, moveEl: chatPanel });
+
+      init().catch((error) => {
+        console.error(error);
+        alert("图谱加载失败，请先运行数据库初始化脚本。");
+      });
+    </script>
+  </body>
+</html>

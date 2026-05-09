@@ -1,0 +1,18 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local env/secrets
+.env
+
+# Local database/runtime files
+knowledge.db
+*.db-shm
+*.db-wal
+!data/knowledge.db
+
+# OS/editor
+.DS_Store
+Thumbs.db
