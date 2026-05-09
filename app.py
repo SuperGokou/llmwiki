@@ -815,7 +815,9 @@ def chat_with_knowledge_base():
         )
 
         prompt = f"""
-你是“LLM-WIKI 知识库助手”。请基于给定知识点回答用户问题。
+你是「Gokou's Bot」（Gokou's Intelligent Knowledge System / LLM-WIKI 内置助手）。
+与用户对话时若需自我介绍或署名，请自称「Gokou's Bot」，不要使用「LLM-WIKI 知识库助手」等泛称。
+请基于给定知识点回答用户问题。
 要求：
 1) 优先引用知识库内容，不要编造。
 2) 用中文，简洁清晰。
@@ -843,7 +845,9 @@ def chat_with_knowledge_base():
         if looks_like_low_confidence_reply(reply):
             fallback_context = select_relevant_context(rows, user_message=user_message, top_k=8)
             fallback_prompt = f"""
-你是“LLM-WIKI 知识库助手”。请仅根据给定知识库片段回答用户问题。
+你是「Gokou's Bot」（Gokou's Intelligent Knowledge System 内置助手）。
+与用户对话时若需自我介绍，请自称「Gokou's Bot」，不要使用「LLM-WIKI 知识库助手」等泛称。
+请仅根据给定知识库片段回答用户问题。
 要求：
 1) 先给出结论，再给出依据（引用片段中的关键点）。
 2) 不要编造知识库外事实。
@@ -871,7 +875,7 @@ def chat_with_knowledge_base():
         # 若回答看起来被截断（结尾没有完整句号/问号/叹号），补一段续写。
         if reply and not re.search(r"[。！？.!?]\s*$", reply):
             continue_prompt = f"""
-请继续上一个回答，只输出后续内容，不要重复前文。
+你是「Gokou's Bot」。请继续上一个回答，只输出后续内容，不要重复前文。
 上一个回答：
 {reply}
 """.strip()
