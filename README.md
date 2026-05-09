@@ -12,6 +12,8 @@
 </p>
 
 <p align="center">
+  <a href="https://gokou-llmwiki.onrender.com/"><strong>Live Demo (Render)</strong></a>
+  ·
   <a href="http://127.0.0.1:5000"><strong>Local</strong></a>
   ·
   Deploy with <strong>render.yaml</strong> (see Deploy below).
