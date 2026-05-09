@@ -93,6 +93,8 @@ Open: <http://127.0.0.1:5000>
 
 ## Environment Variables
 
+### 本地（Ollama）
+
 ```env
 OLLAMA_API_URL=http://127.0.0.1:11434/api/generate
 KNOWLEDGE_MODEL=gemma4:latest
@@ -100,13 +102,27 @@ OCR_MODEL=deepseek-ocr:latest
 CHAT_MODEL=llama3.2:latest
 ```
 
+### Render / 云端（OpenAI 兼容 API）
+
+容器内**不能**使用 `127.0.0.1:11434`。请设置：
+
+| 变量 | 说明 |
+|------|------|
+| `LLM_BACKEND` | 固定为 `openai`（表示走 OpenAI 兼容 `/v1/chat/completions`，不是必须用 OpenAI 公司） |
+| `OPENAI_API_BASE` | 提供商 Base URL，须含 `/v1`，例如 Groq：`https://api.groq.com/openai/v1` |
+| `OPENAI_API_KEY` | 在 Render **Dashboard → 服务 → Environment** 添加为 Secret，**勿提交仓库** |
+| `KNOWLEDGE_MODEL` / `OCR_MODEL` / `CHAT_MODEL` | 与提供商文档一致，例如 Groq：`llama-3.3-70b-versatile` |
+
+也可用 OpenAI（`OPENAI_API_BASE=https://api.openai.com/v1`）、OpenRouter 等。图片/PDF 扫描 OCR 需要**支持视觉**的模型；若 Groq 对当前 `OCR_MODEL` 报不支持图片，请换成该服务商允许的 vision 模型或使用 OpenAI `gpt-4o-mini` 作为 `OCR_MODEL`。
+
+若你在自有服务器上暴露了 **公网 Ollama**（`/api/generate`），也可不设 `LLM_BACKEND`，改为把 `OLLAMA_API_URL` 写成该公网地址，并按需要设置 `API_KEY`。
+
 ## Deploy (Render)
 
 1. Push this repo to GitHub.
 2. In [Render](https://dashboard.render.com): **New** → **Blueprint** → choose the repo and `render.yaml`.
-3. Set environment variables in the service (or add them to the blueprint under `envVars`):
-   - `OLLAMA_API_URL` — must point to a reachable Ollama instance (e.g. your own server with `/api/generate`). Render’s free web service does not run Ollama on the same dyno.
-   - `KNOWLEDGE_MODEL`, `OCR_MODEL`, `CHAT_MODEL` — same as local.
+3. 打开 **Environment**，确认已有 `LLM_BACKEND`、`OPENAI_API_BASE`、三个 `*_MODEL`（蓝图可同步）；**手动新增** `OPENAI_API_KEY`（Groq / OpenAI 等控制台创建密钥）。
+4. **Manual Deploy** 或等待自动部署完成后访问服务的 `https://….onrender.com`。
 
 **SQLite on Render:** the default disk is ephemeral; redeploys can reset `data/knowledge.db`. For persistence, use a [Render disk](https://render.com/docs/disks) mounted at your app’s data path, or migrate to Postgres.
 

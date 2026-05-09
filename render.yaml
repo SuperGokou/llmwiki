@@ -12,3 +12,15 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.11"
+      # Render 容器内无法访问本机 Ollama，须使用公网 LLM API（以下为 Groq OpenAI 兼容示例）。
+      - key: LLM_BACKEND
+        value: openai
+      - key: OPENAI_API_BASE
+        value: https://api.groq.com/openai/v1
+      # 在 Dashboard → Environment 手动新增密钥（勿提交仓库）：OPENAI_API_KEY
+      - key: KNOWLEDGE_MODEL
+        value: llama-3.3-70b-versatile
+      - key: OCR_MODEL
+        value: llama-3.3-70b-versatile
+      - key: CHAT_MODEL
+        value: llama-3.3-70b-versatile

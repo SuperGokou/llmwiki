@@ -75,6 +75,34 @@ OCR_MODEL = os.getenv("OCR_MODEL", "deepseek-ocr:latest")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "llama3.2:latest")
 REMOTE_API_KEY = os.getenv("API_KEY") or os.getenv("api")
 IS_LOCAL_OLLAMA = "127.0.0.1" in OLLAMA_API or "localhost" in OLLAMA_API
+OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "").strip().rstrip("/")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+
+
+def use_openai_compatible_backend() -> bool:
+    """云端（Render 等）使用 OpenAI 兼容 HTTP API（Groq / OpenAI / OpenRouter 等）。"""
+    return os.getenv("LLM_BACKEND", "").strip().lower() == "openai"
+
+
+def warn_if_render_misconfigured() -> None:
+    if os.getenv("RENDER") != "true":
+        return
+    if use_openai_compatible_backend():
+        if not (OPENAI_API_KEY and OPENAI_API_BASE):
+            print(
+                "RENDER WARNING: LLM_BACKEND=openai 但未设置 OPENAI_API_KEY 或 OPENAI_API_BASE。",
+                flush=True,
+            )
+    elif IS_LOCAL_OLLAMA:
+        print(
+            "RENDER WARNING: OLLAMA_API_URL 指向本机，容器内无法访问。"
+            "请在 Environment 设置 LLM_BACKEND=openai、OPENAI_API_BASE、OPENAI_API_KEY，"
+            "或将 OLLAMA_API_URL 改为公网可访问的 Ollama。",
+            flush=True,
+        )
+
+
+warn_if_render_misconfigured()
 
 app = Flask(__name__, template_folder="templates")
 
@@ -102,6 +130,74 @@ def get_db_connection() -> sqlite3.Connection:
     return conn
 
 
+def call_openai_compatible(
+    prompt: str,
+    model: str,
+    images: Optional[list[str]] = None,
+    options: Optional[dict[str, Any]] = None,
+    keep_alive: Optional[str] = None,
+) -> str:
+    """OpenAI 兼容 /v1/chat/completions（Groq、OpenAI、OpenRouter 等）。"""
+    del keep_alive  # Ollama 专用；兼容接口不使用
+    options = options or {}
+    temperature = float(options.get("temperature", 0.2))
+    max_tokens = int(options.get("num_predict", options.get("max_tokens", 1024)))
+    max_tokens = max(16, min(max_tokens, 128000))
+
+    url = f"{OPENAI_API_BASE}/chat/completions"
+    if images:
+        parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for b64 in images:
+            parts.append(
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+            )
+        messages = [{"role": "user", "content": parts}]
+    else:
+        messages = [{"role": "user", "content": prompt}]
+
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=180) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode("utf-8", errors="ignore")[:800]
+        raise ValueError(f"LLM API 异常 (HTTP {err.code}): {detail}") from err
+    except urllib.error.URLError as err:
+        raise ValueError(f"LLM API 连接失败: {err}") from err
+
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if not choices:
+        raise ValueError(f"LLM API 返回异常: {str(data)[:400]}")
+    msg = choices[0].get("message") or {}
+    content = msg.get("content")
+    if isinstance(content, list):
+        # 少数提供商返回 content 为 parts 列表
+        text_parts = []
+        for p in content:
+            if isinstance(p, dict) and p.get("type") == "text":
+                text_parts.append(p.get("text", ""))
+        return "".join(text_parts).strip()
+    if isinstance(content, str):
+        return content.strip()
+    return ""
+
+
 def call_ollama(
     prompt: str,
     model: str,
@@ -109,7 +205,21 @@ def call_ollama(
     options: Optional[dict[str, Any]] = None,
     keep_alive: Optional[str] = None,
 ) -> str:
-    """调用本地 Ollama，并返回生成文本。"""
+    """调用 Ollama /api/generate，或在 LLM_BACKEND=openai 时走 OpenAI 兼容接口。"""
+    if use_openai_compatible_backend():
+        if not OPENAI_API_KEY or not OPENAI_API_BASE:
+            raise ValueError(
+                "LLM_BACKEND=openai 时必须在环境变量中设置 OPENAI_API_BASE 与 OPENAI_API_KEY。"
+                "（Render：Dashboard → 服务 → Environment）"
+            )
+        return call_openai_compatible(
+            prompt=prompt,
+            model=model,
+            images=images,
+            options=options,
+            keep_alive=keep_alive,
+        )
+
     payload = {
         "model": model,
         "prompt": prompt,
