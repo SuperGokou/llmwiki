@@ -6,7 +6,7 @@
     <title>Gokou's Intelligent Knowledge System</title>
     <link
       rel="icon"
-      href="{{ url_for('static', filename='images/logo-dbz.png') }}"
+      href="{{ url_for('static', filename='images/logo-dragon-ball-1996.png') }}"
       type="image/png"
     />
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -79,10 +79,11 @@
       }
 
       .header-logo {
-        height: 44px;
+        height: 48px;
         width: auto;
-        max-width: min(200px, 38vw);
+        max-width: min(340px, 52vw);
         object-fit: contain;
+        object-position: left center;
         flex-shrink: 0;
         filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
       }
@@ -781,9 +782,9 @@
       <section class="card header">
         <img
           class="header-logo"
-          src="{{ url_for('static', filename='images/logo-dbz.png') }}"
-          width="160"
-          height="44"
+          src="{{ url_for('static', filename='images/logo-dragon-ball-1996.png') }}"
+          width="768"
+          height="432"
           alt=""
           decoding="async"
         />
