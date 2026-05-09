@@ -86,6 +86,14 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "https://ollama.com").strip().rstrip("/")
 OLLAMA_CLOUD_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
 
 
+def is_render_runtime() -> bool:
+    """Render 会注入 RENDER=true（参见 Render 官方文档）。"""
+    return os.getenv("RENDER", "").strip().lower() in ("true", "1", "yes")
+
+
+RUNTIME_ENV = "render" if is_render_runtime() else "local"
+
+
 def use_openai_compatible_backend() -> bool:
     """云端（Render 等）使用 OpenAI 兼容 HTTP API（Groq / OpenAI / OpenRouter 等）。"""
     return os.getenv("LLM_BACKEND", "").strip().lower() == "openai"
@@ -99,7 +107,7 @@ def use_ollama_cloud_backend() -> bool:
 
 
 def warn_if_render_misconfigured() -> None:
-    if os.getenv("RENDER") != "true":
+    if not is_render_runtime():
         return
     if use_openai_compatible_backend():
         if not OPENAI_API_KEY:
@@ -120,6 +128,12 @@ def warn_if_render_misconfigured() -> None:
 
 
 warn_if_render_misconfigured()
+
+print(
+    f"[LLM-WIKI] runtime={RUNTIME_ENV} RENDER={os.getenv('RENDER')!r} LLM="
+    f"{'openai' if use_openai_compatible_backend() else 'ollama_cloud' if use_ollama_cloud_backend() else 'ollama_local'}",
+    flush=True,
+)
 
 app = Flask(__name__, template_folder="templates")
 
@@ -582,7 +596,25 @@ def looks_like_low_confidence_reply(text: str) -> bool:
 @app.route("/")
 def index():
     """渲染知识图谱页面。"""
-    return render_template("graph.html")
+    return render_template("graph.html", runtime_env=RUNTIME_ENV)
+
+
+@app.route("/api/runtime")
+def api_runtime():
+    """前端或运维探测当前进程运行在本地还是 Render。"""
+    if use_openai_compatible_backend():
+        llm_mode = "openai_compatible"
+    elif use_ollama_cloud_backend():
+        llm_mode = "ollama_cloud"
+    else:
+        llm_mode = "ollama_local"
+    return jsonify(
+        {
+            "environment": RUNTIME_ENV,
+            "is_render": is_render_runtime(),
+            "llm_backend": llm_mode,
+        }
+    )
 
 
 @app.route("/api/graph")

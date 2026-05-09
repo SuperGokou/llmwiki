@@ -99,6 +99,30 @@
         text-shadow: 0 0 10px rgba(255, 179, 24, 0.25), 0 2px 0 rgba(0, 0, 0, 0.35);
       }
 
+      .runtime-badge {
+        flex-shrink: 0;
+        align-self: center;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 211, 110, 0.35);
+        background: rgba(10, 18, 40, 0.85);
+        color: var(--muted);
+      }
+
+      .runtime-badge[data-runtime="render"] {
+        border-color: rgba(82, 148, 255, 0.45);
+        color: #8cb4ff;
+      }
+
+      .runtime-badge[data-runtime="local"] {
+        border-color: rgba(74, 222, 128, 0.45);
+        color: #86efac;
+      }
+
       button {
         font-size: 13px;
         border-radius: 8px;
@@ -777,7 +801,10 @@
       }
     </style>
   </head>
-  <body>
+  <body data-runtime="{{ runtime_env|default('local') }}">
+    <script>
+      window.LLM_WIKI_RUNTIME = {{ runtime_env|default('local')|tojson }};
+    </script>
     <div class="page">
       <section class="card header">
         <img
@@ -789,6 +816,11 @@
           decoding="async"
         />
         <h1>Gokou's Intelligent Knowledge System</h1>
+        <span
+          class="runtime-badge"
+          data-runtime="{{ runtime_env|default('local') }}"
+          title="运行环境：由服务端 RENDER 等变量判定"
+        >{% if (runtime_env|default('local')) == 'render' %}Render{% else %}Local{% endif %}</span>
       </section>
 
       <section class="main">
